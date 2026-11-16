@@ -1,4 +1,4 @@
-<!DOCTYPE html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><link rel=stylesheet href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Varela+Round&display=swap"><title>Among Us (2018 build)</title><style>
+<!DOCTYPE html><html><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no"><script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script><link rel=stylesheet href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Varela+Round&display=swap"><title>Among Us (2018 build)</title><style>
 :root{color-scheme:dark;--sa:env(safe-area-inset-top,0px);--sb:env(safe-area-inset-bottom,0px)}
 *{box-sizing:border-box;-webkit-user-select:none;user-select:none;touch-action:none}
 html,body{margin:0;height:100%;background:#000;color:#fff;font:400 20px "Varela Round",Arial,sans-serif;overflow:hidden}
@@ -294,7 +294,21 @@ let ONL=null;const CC='ABCDEFGHJKLMNPQRSTUVWXYZ',rcode=()=>[...Array(6)].map(()=
 {const s=document.createElement('style');s.textContent='.ob{background:#000;border:4px solid #fff;border-radius:10px;color:#fff;font:400 26px/1.1 "Varela Round",Arial,sans-serif;padding:4px 14px;cursor:pointer}.orow{display:flex;align-items:flex-end;gap:10px;margin:12px 0}.orow img{width:min(20vh,120px);height:min(20vh,120px);object-fit:contain}.orow h2{margin:0;text-align:left;font:400 min(7vh,44px) "Varela Round",Arial,sans-serif}.ol{border-bottom:4px solid #fff;margin:2px 0 8px}.fr{display:flex;justify-content:space-between;align-items:center;gap:8px;margin:6px 0;font-size:20px}#olb{position:fixed;top:calc(8px + var(--sa));left:50%;transform:translateX(-50%);z-index:6;display:none;gap:10px;align-items:center}#olb .ob{font-size:18px;padding:2px 10px}#tst{position:fixed;left:50%;bottom:calc(70px + var(--sb));transform:translateX(-50%);z-index:30;background:#000;border:3px solid #fff;border-radius:8px;padding:6px 14px;font-size:18px;display:none;text-align:center;max-width:90vw}';document.head.append(s);
 const d=document.createElement('div');d.id='olb';d.innerHTML='<button class=ob id=olv>Leave</button><span class=ob id=olc style="cursor:default"></span>';document.body.append(d);const t=document.createElement('div');t.id='tst';document.body.append(t);$('olv').onclick=()=>{leaveOnl();menu()}}
 let _tt;const toast=m=>{const t=$('tst');t.textContent=m;t.style.display='block';clearTimeout(_tt);_tt=setTimeout(()=>t.style.display='none',3000)};
-const gcl=()=>window.claude&&claude.use?claude.use('room').catch(()=>null):Promise.resolve(null);
+
+const RM={h:0,L:[],g:null,iv:null};
+function mkRoom(code,host){return new Promise((res,rej)=>{const id='au18-'+code.toLowerCase(),me={},peers={},conns=[];let hc=null,ok=0;const pr=host?new Peer(id):new Peer();
+const hs=[],net={on:f=>hs.push(f),emit:e=>{if(host)conns.forEach(c=>c.open&&c.send({t:'e',e}));else if(hc&&hc.open)hc.send({t:'e',e});return Promise.resolve()},peers:()=>Object.entries(peers).map(([k,v])=>({isMe:false,peer:k,presence:v})),presence:p=>{for(const k in p){if(p[k]==null)delete me[k];else me[k]=p[k]}return Promise.resolve()},leave:()=>{clearInterval(iv);try{pr.destroy()}catch(e){}}};
+const iv=setInterval(()=>{if(host){const s={t:'s',s:{h:me,o:peers}};conns.forEach(c=>c.open&&c.send(s))}else if(hc&&hc.open)hc.send({t:'p',p:me})},50);
+pr.on('error',e=>{if(!ok){clearInterval(iv);rej(e)}});
+if(host)pr.on('open',()=>{ok=1;res(net)}),pr.on('connection',c=>{conns.push(c);c.on('data',d=>{if(d.t=='p')peers[c.peer]=d.p;else if(d.t=='e'){hs.forEach(f=>f(d.e));conns.forEach(o=>o!=c&&o.open&&o.send(d))}});c.on('close',()=>{delete peers[c.peer];const i=conns.indexOf(c);if(i>=0)conns.splice(i,1)})});
+else pr.on('open',()=>{const c=pr.connect(id);setTimeout(()=>{if(!ok){clearInterval(iv);try{pr.destroy()}catch(e){}rej('timeout')}},7000);c.on('open',()=>{hc=c;ok=1;res(net)});c.on('data',d=>{if(d.t=='e'){hs.forEach(f=>f(d.e));return}if(d.t!='s')return;for(const k in peers)delete peers[k];const o=d.s.o;for(const k in o)if(k!=pr.id)peers[k]=o[k];peers.host=d.s.h});c.on('close',()=>{for(const k in peers)delete peers[k]})})})}
+RM.join=n=>mkRoom(n.slice(2),RM.h);
+function dirQuery(msg){return new Promise(r=>{let done=0;const p=new Peer(),fin=v=>{if(!done){done=1;try{p.destroy()}catch(e){}r(v)}};p.on('open',()=>{const c=p.connect('au18-dir');c.on('open',()=>{c.send(msg);c.on('data',d=>fin(d.l||[]))})});setTimeout(()=>fin(null),4000);p.on('error',()=>fin(null))})}
+let dirSrv=null;function claimDir(){if(dirSrv)return;const p=new Peer('au18-dir'),db={};dirSrv=p;p.on('connection',c=>{c.on('data',d=>{const n=Date.now();if(d.t=='reg')db[d.g.code]=Object.assign({},d.g,{t:n});if(d.t=='unreg')delete db[d.code];for(const k in db)if(n-db[k].t>9000)delete db[k];c.send({l:Object.values(db)})})});p.on('error',()=>{dirSrv=null;try{p.destroy()}catch(e){}})}
+RM.peers=()=>RM.L.map(g=>({isMe:false,peer:g.code,presence:{g}}));
+RM.onPeers=fn=>{const poll=()=>dirQuery({t:'list'}).then(l=>{if(l==null)claimDir();else{RM.L=l;fn()}});poll();const iv=setInterval(poll,2500);return()=>clearInterval(iv)};
+RM.presence=p=>{if(p.g){RM.g=p.g;if(!RM.iv){const reg=()=>RM.g&&dirQuery({t:'reg',g:RM.g}).then(l=>{if(l==null)claimDir()});reg();RM.iv=setInterval(reg,4000)}}else if(RM.g){const c=RM.g.code;RM.g=null;clearInterval(RM.iv);RM.iv=null;dirQuery({t:'unreg',code:c})}return Promise.resolve()};
+const gcl=()=>Promise.resolve(RM);
 function leaveOnl(){if(!ONL)return;try{ONL.gr.leave()}catch(e){}if(ONL.host&&ONL.pub)try{ONL.rm.presence({g:null})}catch(e){}ONL=null;P=[];$('olb').style.display='none'}
 const gname=()=>{nm=(($('on')||{}).value||nm||'').trim().slice(0,10)||'Player'+(R()*900+100|0);return nm};
 function onl(){ph='menu';leaveOnl();const u=ui(),r=(i,t,b,id)=>'<div class=orow><img src="'+i+'"><div style="flex:1"><h2>'+t+'</h2><div class=ol></div><button class=ob id='+id+'>'+b+'</button></div></div>';
@@ -304,21 +318,41 @@ function ohost(){const u=ui('#000a');let pub=1,mx=S.n;const rd=()=>{u.innerHTML=
 $('hm').onchange=e=>mx=+e.target.value;$('hp').onclick=()=>{pub=1;rd()};$('hv').onclick=()=>{pub=0;rd()};$('hb').onclick=onl;$('hc').onclick=()=>{S.n=mx;S.imp=Math.min(S.imp,Math.max(1,(mx-1)>>1));enter(rcode(),1,{pub,max:mx})}};rd()}
 function ocode(){const u=ui('#000a');u.innerHTML='<div class=pn><b>ENTER CODE</b><p><input id=cd2 class=ob maxlength=6 placeholder="ABCDEF" style="width:11em;text-align:center;text-transform:uppercase;cursor:text"></p><p><button class=ob id=cj>Join</button> <button class=ob id=cb>Back</button></p></div>';$('cb').onclick=onl;$('cj').onclick=()=>{const c=$('cd2').value.trim().toUpperCase();if(c.length!=6)return toast('Codes have 6 letters');enter(c,0)}}
 async function ofind(){const u=ui('#000a');u.innerHTML='<div class=pn><b>PUBLIC GAMES</b><div id=fl style="margin:8px 0">Searching...</div><p><button class=ob id=fx>Refresh</button> <button class=ob id=fb>Back</button></p></div>';const rm=await gcl();let un=()=>{};$('fb').onclick=()=>{un();onl()};
-if(!rm){$('fl').textContent='Online needs the shared artifact link';return}
+if(!rm){$('fl').textContent='Online is unavailable';return}
 const dr=()=>{if(!$('fl'))return un();const L=rm.peers().filter(p=>!p.isMe&&p.presence.g);$('fl').innerHTML=L.length?L.map(p=>{const g=p.presence.g;return'<div class=fr><span>'+String(g.name).replace(/[<>&]/g,'')+' '+(+g.n|0)+'/'+(+g.max|0)+'</span><button class=ob data-c="'+String(g.code).replace(/[^A-Z]/g,'')+'" style="font-size:20px">Join</button></div>'}).join(''):'No public games right now';$('fl').querySelectorAll('button').forEach(b=>b.onclick=()=>{un();enter(b.dataset.c,0)})};
 dr();un=rm.onPeers(dr);$('fx').onclick=dr}
-async function enter(code,host,cfg){const rm=await gcl();let gr;try{gr=rm&&await rm.join('g-'+code.toLowerCase())}catch(e){}if(!gr)return toast('Online needs the shared artifact link');
+async function enter(code,host,cfg){const rm=await gcl();let gr;try{gr=rm&&await(rm.h=host,rm.join('g-'+code.toLowerCase()))}catch(e){}if(!gr)return toast(host?'Could not create the game. Try again.':'Game not found or offline');
 if(!host){await new Promise(r=>setTimeout(r,1500));const ps=gr.peers().filter(p=>!p.isMe),h=ps.find(p=>p.presence.host);if(!h){try{gr.leave()}catch(e){}return toast('Game not found')}if(ps.length+1>(+h.presence.max||10)){try{gr.leave()}catch(e){}return toast('Game is full')}
 const used=ps.map(p=>p.presence.c);if(used.includes(hc))hc=[...Array(12).keys()].find(i=>!used.includes(i));Object.assign(S,h.presence.S||{})}
-ONL={rm,gr,code,host,pub:cfg&&cfg.pub,j:'',g:'',id:rcode()+rcode(),gn:null};if(!host){const hh=gr.peers().find(p=>p.presence.host);ONL.gn=hh&&hh.presence.go?hh.presence.go.n:null}P=[];lobby();tick()}
+ONL={rm,gr,code,host,pub:cfg&&cfg.pub,j:'',g:'',id:rcode()+rcode(),gn:null};if(!host){const hh=gr.peers().find(p=>p.presence.host);ONL.gn=hh&&hh.presence.go?hh.presence.go.n:null}gr.on(onEv);ONL.mi=0;P=[];lobby();tick()}
 function syncP(ps){ps=ps||(ONL?ONL.gr.peers().filter(p=>!p.isMe):[]);if(!P.length||P[0]!=me){me=mkP(0,nm,hc,0);P=[me]}const kk=q=>q.presence.id||q.peer,ids=new Set(ps.map(kk));P=P.filter((p,i)=>i==0||ids.has(p.pid));
-ps.forEach(q=>{const d=q.presence;if(d.x==null)return;let p=P.find(o=>o.pid==kk(q));if(!p){p=mkP(P.length,'?',0,0);p.pid=kk(q);p.x=d.x;p.y=d.y;P.push(p)}const dx=d.x-p.x,dy=d.y-p.y;if(Math.hypot(dx,dy)>.3){p.mt=performance.now();p.af+=.4}p.x+=dx*.5;p.y+=dy*.5;p.fx=d.fx||1;p.name=d.name||'?';p.c=d.c|0;p.h=d.h==null?-1:d.h;if(d.td!=null)p.tasks.forEach((t,j)=>t.d=j<d.td?1:0)});P.forEach((p,i)=>p.i=i)}
-function tick(){if(!ONL)return;const gr=ONL.gr,ps=gr.peers().filter(p=>!p.isMe),pr={name:me.name,c:me.c,h:me.h,x:+me.x.toFixed(1),y:+me.y.toFixed(1),fx:me.fx,host:ONL.host?1:0,max:S.n,id:ONL.id,td:ph=='play'?me.tasks.filter(t=>t.d).length:0};if(ONL.host)pr.S=S;const j=JSON.stringify(pr);if(j!=ONL.j){ONL.j=j;gr.presence(pr).catch(()=>{})}
+ps.forEach(q=>{const d=q.presence;if(d.x==null)return;let p=P.find(o=>o.pid==kk(q));if(!p){p=mkP(P.length,'?',0,0);p.pid=kk(q);p.x=d.x;p.y=d.y;P.push(p)}const dx=d.x-p.x,dy=d.y-p.y;if(Math.hypot(dx,dy)>.3){p.mt=performance.now();p.af+=.4}p.x+=dx*.5;p.y+=dy*.5;p.fx=d.fx||1;p.name=d.name||'?';p.c=d.c|0;p.h=d.h==null?-1:d.h;p.inv=d.nv?1:0;if(d.td!=null)p.tasks.forEach((t,j)=>t.d=j<d.td?1:0)});P.forEach((p,i)=>p.i=i)}
+function tick(){if(!ONL)return;const gr=ONL.gr,ps=gr.peers().filter(p=>!p.isMe),pr={name:me.name,c:me.c,h:me.h,x:+me.x.toFixed(1),y:+me.y.toFixed(1),fx:me.fx,host:ONL.host?1:0,max:S.n,nv:me.inv?1:0,id:ONL.id,td:ph=='play'?me.tasks.filter(t=>t.d).length:0};if(ONL.host)pr.S=S;const j=JSON.stringify(pr);if(j!=ONL.j){ONL.j=j;gr.presence(pr).catch(()=>{})}
 if(ONL.host&&ONL.pub){const g=ps.length+1+'/'+S.n+me.name;if(g!=ONL.g){ONL.g=g;ONL.rm.presence({g:{code:ONL.code,name:me.name,n:ps.length+1,max:S.n}}).catch(()=>{})}}
 if(!ONL.host){const h=ps.find(p=>p.presence.host);if(h){Object.assign(S,h.presence.S||{});const g=h.presence.go;if(g&&g.n!=ONL.gn&&ph=='lobby'){ONL.gn=g.n;goStart(g)}}else if(performance.now()-(ONL.t0=ONL.t0||performance.now())>4000&&!ONL.nh){ONL.nh=1;leaveOnl();toast('The host left the game');menu();return}}
-syncP(ps);const b=$('olb');b.style.display=ph=='lobby'?'flex':'none';$('olc').textContent='CODE '+ONL.code+'  '+P.length+'/'+S.n}
+syncP(ps);netTick();const b=$('olb');b.style.display=ph=='lobby'?'flex':'none';$('olc').textContent='CODE '+ONL.code+'  '+P.length+'/'+S.n}
 function onlStart(){if(ph!='lobby')return;if(P.length<2)return toast('Need at least 2 players');const o=S.n;S.n=P.length;start();S.n=o;const id=p=>p==me?ONL.id:p.pid,go={n:Date.now(),imp:P.filter(p=>p.imp).map(id),t:{}};P.forEach(p=>go.t[id(p)]=p.tasks.map(t=>t.s.n));ONL.gr.presence({go}).catch(()=>{})}
 function goStart(go){const o=S.n;S.n=P.length;start();S.n=o;P.forEach(p=>{const id=p==me?ONL.id:p.pid;p.imp=go.imp.includes(id)?1:0;p.tasks=(go.t[id]||[]).map(n=>({s:ALLST.find(s=>s.n==n),d:0})).filter(t=>t.s)})}
+
+let RX=0;const rx=f=>{RX=1;try{f()}finally{RX=0}},pid=p=>p==me?ONL.id:p.pid,byPid=id=>id==ONL.id?me:P.find(p=>p.pid==id),snd=e=>{if(ONL&&!RX)ONL.gr.emit(e).catch(()=>{})},cidx=p=>[ONL.id,...P.filter(q=>q!=me).map(q=>q.pid)].sort().indexOf(pid(p));
+function onEv(e){if(!ONL||!e)return;const T=e.t;
+if(T=='kill'){const a=byPid(e.a),v=byPid(e.v);if(a&&v&&ph=='play'&&v.alive)rx(()=>kill(a,v))}
+else if(T=='meet'){const c=byPid(e.c),b=e.bc!=null?bodies.find(x=>x.c==e.bc):0;if(c&&ph=='play')rx(()=>callMeeting(c,b||0))}
+else if(T=='vote'){if(meet&&meet.ph=='v'){const a=byPid(e.v),t=e.s==-1?-1:(byPid(e.s)||{}).i;if(a&&t!=null)meet.v[a.i]=t}}
+else if(T=='chat'){if(meet)msgs.push({n:e.n,t:e.tx,g:e.g,r:1})}
+else if(T=='sab'){if(ph=='play'&&!sab){sabCD=0;rx(()=>sabotage(e.k))}}
+else if(T=='fix'){const q=sab&&sab.st[e.i];if(q){q.d=1;q.s=1;rx(()=>fixed())}}}
+{const _k=kill;kill=function(a,v){if(ONL&&!RX&&a==me)snd({t:'kill',a:pid(a),v:pid(v)});_k(a,v)};
+const _c=callMeeting;callMeeting=function(c,b){if(ONL&&!RX&&c==me&&ph=='play')snd({t:'meet',c:pid(c),bc:b?b.c:null});_c(c,b)};
+const _o=okc;okc=function(){const had=meet&&meet.v[0]!=null;_o();if(ONL&&meet&&!had&&meet.v[0]!=null){const t=meet.v[0];snd({t:'vote',v:ONL.id,s:typeof t!='number'||t<0?-1:pid(P[t])})}};
+const _s=sabotage;sabotage=function(t){if(ONL&&!RX&&!sab&&sabCD<=0)snd({t:'sab',k:t});_s(t)};
+const _f=fixed;fixed=function(){if(sab&&ONL&&!RX)sab.st.forEach((s,i)=>{if(s.d&&!s.s){s.s=1;snd({t:'fix',i})}});_f()};
+const _r=ring;ring=function(p,i){return _r(p,ONL?cidx(p):i)}}
+{const _ck=chk;chk=function(){if(ONL&&ph!='end'&&P.length<=2){const ia=P.filter(p=>p.imp&&p.alive).length,ca=P.filter(p=>!p.imp&&p.alive).length;if(!ia)end('c');else if(!ca)end('i');else if(prog()>=1)end('c');return}_ck()}}
+addEventListener('keydown',e=>{if(ph!='lobby'||$('ui').style.display=='flex'||e.target.tagName=='INPUT')return;const k=e.key.toLowerCase();if(k=='e'||k==' '||k=='enter')lobUse();else if(k=='g'&&ONL&&ONL.host)onlStart()});
+function netTick(){if(ph=='lobby'){ONL.td=0;return}
+if(meet){if(msgs.length<ONL.mi)ONL.mi=0;while(ONL.mi<msgs.length){const m=msgs[ONL.mi++];if(!m.r&&!m.s&&m.n==me.name){m.s=1;snd({t:'chat',n:m.n,tx:m.t,g:m.g})}}}
+const td=P.reduce((a,p)=>a+(p==me?0:p.tasks.filter(t=>t.d).length),0);if(td!=ONL.td){ONL.td=td;if(ph=='play')chk()}}
 setInterval(tick,50);
 {const _sp=setP;setP=function(){ONL?syncP():_sp()};const _lh=lhud;lhud=function(){_lh();if(ONL&&!ONL.host)$('bG').style.display='none'};const _lu=lobUse;lobUse=function(){if(ONL&&!ONL.host&&d2(me,CN)<26)return toast('Only the host can change settings');_lu()};
 ['pointerdown','click'].forEach(t=>document.addEventListener(t,e=>{if(ONL&&e.target.closest&&e.target.closest('#bG')){e.stopPropagation();e.preventDefault();if(t=='click')onlStart()}},true))}
